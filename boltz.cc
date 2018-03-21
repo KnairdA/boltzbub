@@ -1,56 +1,19 @@
 #include <iostream>
-#include <cmath>
-#include <algorithm>
 #include <numeric>
 #include <iostream>
 #include <fstream>
 
-inline double sq(double x) noexcept {
-	return x * x;
-}
+#include "src/vector.h"
 
 struct DataCell {
 	double data[3][3];
 
-	double& get(int x, int y) {
+	inline double& get(int x, int y) {
 		return data[1+x][1-y];
 	}
 
-	double get(int x, int y) const {
+	inline double get(int x, int y) const {
 		return data[1+x][1-y];
-	}
-};
-
-struct Vector {
-	double data[2];
-
-	double comp(int x, int y) const {
-		return x*data[0] + y*data[1];
-	}
-
-	double norm() const {
-		return std::sqrt(sq(data[0]) + sq(data[1]));
-	}
-
-	double& operator[](std::size_t i) {
-		return data[i];
-	}
-
-	double operator[](std::size_t i) const {
-		return data[i];
-	}
-
-	Vector operator*(double scalar) const {
-		return Vector{
-			data[0] * scalar,	
-			data[1] * scalar
-		};
-	}
-
-	Vector& operator+=(const Vector& rhs) {
-		data[0] += rhs[0];
-		data[1] += rhs[1];
-		return *this;
 	}
 };
 
@@ -66,15 +29,11 @@ constexpr DataCell weight{
 
 struct Cell : DataCell {
 	void equilibrize(Density d, Velocity v) {
-		get(-1, 1) = weight.get(-1, 1) * d * ( 1 + 3*v.comp(-1, 1) + 4.5*sq(v.comp(-1, 1)) - 1.5*sq(v.norm()) );
-		get( 0, 1) = weight.get( 0, 1) * d * ( 1 + 3*v.comp( 0, 1) + 4.5*sq(v.comp( 0, 1)) - 1.5*sq(v.norm()) );
-		get( 1, 1) = weight.get( 1, 1) * d * ( 1 + 3*v.comp( 1, 1) + 4.5*sq(v.comp( 1, 1)) - 1.5*sq(v.norm()) );
-		get(-1, 0) = weight.get(-1, 0) * d * ( 1 + 3*v.comp(-1, 0) + 4.5*sq(v.comp(-1, 0)) - 1.5*sq(v.norm()) );
-		get( 0, 0) = weight.get( 0, 0) * d * ( 1                                           - 1.5*sq(v.norm()) );
-		get( 1, 0) = weight.get( 1, 0) * d * ( 1 + 3*v.comp( 1, 0) + 4.5*sq(v.comp( 1, 0)) - 1.5*sq(v.norm()) );
-		get(-1,-1) = weight.get(-1,-1) * d * ( 1 + 3*v.comp(-1,-1) + 4.5*sq(v.comp(-1,-1)) - 1.5*sq(v.norm()) );
-		get( 0,-1) = weight.get( 0,-1) * d * ( 1 + 3*v.comp( 0,-1) + 4.5*sq(v.comp( 0,-1)) - 1.5*sq(v.norm()) );
-		get( 1,-1) = weight.get( 1,-1) * d * ( 1 + 3*v.comp( 1,-1) + 4.5*sq(v.comp( 1,-1)) - 1.5*sq(v.norm()) );
+		for ( int i = -1; i <= 1; ++i ) {
+			for ( int j = -1; j <= 1; ++j ) {
+				get(i,j) = weight.get(i,j) * d * (1 + 3*v.comp(i,j) + 4.5*sq(v.comp(i,j)) - 1.5*sq(v.norm()));
+			}
+		}
 	}
 
 	double sum() const {
@@ -82,18 +41,17 @@ struct Cell : DataCell {
 	}
 
 	Velocity velocity(Density d) const {
-		return Velocity{
+		return 1./d * Velocity{
 			get( 1, 0) - get(-1, 0) + get( 1, 1) - get(-1,-1) + get( 1,-1) - get(-1,1),
 			get( 0, 1) - get( 0,-1) + get( 1, 1) - get(-1,-1) - get( 1,-1) + get(-1,1)
-		} * ( 1./d );
+		};
 	}
 };
 
-constexpr std::size_t dimX = 128; 
-constexpr std::size_t dimY = 128; 
+constexpr std::size_t dimX = 128;
+constexpr std::size_t dimY = 128;
 
-constexpr double tau   = 0.6;
-constexpr double omega = 1. / tau;
+constexpr double tau = 1.0;
 
 Cell cellsA[dimX][dimY];
 Cell cellsB[dimX][dimY];
@@ -121,28 +79,22 @@ void computeLbmStep(std::size_t t) {
 	for ( std::size_t x = 1; x < dimX - 1; ++x ) {
 		for ( std::size_t y = 1; y < dimY - 1; ++y ) {
 			// update velocity (force coupling)
-			//velocity[x][y] += force[x][y] * (tau / density[x][y]);
+			//velocity[x][y] += tau / density[x][y] * force[x][y];
 
 			// compute equilibrium
 			Cell eq;
 			eq.equilibrize(density[x][y], velocity[x][y]);
 
-			Cell& old = (*oldCells)[x][y];
-
 			// collide & stream
-			(*newCells)[x    ][y    ].get( 0, 0) = old.get( 0, 0) + omega * ( eq.get( 0, 0) - old.get( 0, 0) );
-			(*newCells)[x + 1][y    ].get( 1, 0) = old.get( 1, 0) + omega * ( eq.get( 1, 0) - old.get( 1, 0) );
-			(*newCells)[x - 1][y    ].get(-1, 0) = old.get(-1, 0) + omega * ( eq.get(-1, 0) - old.get(-1, 0) );
-			(*newCells)[x    ][y + 1].get( 0, 1) = old.get( 0, 1) + omega * ( eq.get( 0, 1) - old.get( 0, 1) );
-			(*newCells)[x    ][y - 1].get( 0,-1) = old.get( 0,-1) + omega * ( eq.get( 0,-1) - old.get( 0,-1) );
-			(*newCells)[x + 1][y + 1].get( 1, 1) = old.get( 1, 1) + omega * ( eq.get( 1, 1) - old.get( 1, 1) );
-			(*newCells)[x - 1][y - 1].get(-1,-1) = old.get(-1,-1) + omega * ( eq.get(-1,-1) - old.get(-1,-1) );
-			(*newCells)[x + 1][y - 1].get( 1,-1) = old.get( 1,-1) + omega * ( eq.get( 1,-1) - old.get( 1,-1) );
-			(*newCells)[x - 1][y + 1].get(-1, 1) = old.get(-1, 1) + omega * ( eq.get(-1, 1) - old.get(-1, 1) );
+			for ( int i = -1; i <= 1; ++i ) {
+				for ( int j = -1; j <= 1; ++j ) {
+					(*newCells)[x+i][y+j].get(i,j) = (*oldCells)[x][y].get(i,j) + 1./tau * (eq.get(i,j) - (*oldCells)[x][y].get(i,j));
+				}
+			}
 		}
 	}
 
-	// straight wall cell bounce back 
+	// straight wall cell bounce back
 	for ( std::size_t x = 2; x < dimX - 2; ++x ) {
 		(*newCells)[x][1].get( 0, 1) = (*newCells)[x][0].get( 0,-1);
 		(*newCells)[x][1].get( 1, 1) = (*newCells)[x][0].get(-1,-1);
@@ -242,8 +194,11 @@ void init() {
 		}
 	}
 
-	for ( std::size_t x = 50; x < dimX-50; ++x ) {
-		for ( std::size_t y = 50; y < dimY-50; ++y ) {
+	for ( std::size_t y = 55; y < dimY-55; ++y ) {
+		for ( std::size_t x = 35; x < dimX-75; ++x ) {
+			density[x][y] = 0.8;
+		}
+		for ( std::size_t x = 75; x < dimX-35; ++x ) {
 			density[x][y] = 0.8;
 		}
 	}
@@ -252,10 +207,10 @@ void init() {
 int main() {
 	init();
 
-	for ( std::size_t t = 0; t < 500; ++t ) {
+	for ( std::size_t t = 0; t < 100; ++t ) {
 		computeLbmStep(t);
 
-		if ( t % 1 == 0 ) {
+		if ( t % 2 == 0 ) {
 			writeCurrentStateAsVTK(t);
 		}
 	}
