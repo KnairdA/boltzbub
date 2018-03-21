@@ -2,6 +2,7 @@
 #include <numeric>
 #include <iostream>
 #include <fstream>
+#include <memory>
 
 #include "src/vector.h"
 
@@ -48,33 +49,48 @@ struct Cell : DataCell {
 	}
 };
 
+class CellBuffer {
+	private:
+		const std::size_t dim_x_;
+		const std::size_t dim_y_;
+
+		std::unique_ptr<Cell[]> curr_;
+		std::unique_ptr<Cell[]> prev_;
+
+	public:
+		CellBuffer(std::size_t dimX, std::size_t dimY):
+			dim_x_(dimX),
+			dim_y_(dimY),
+			curr_(new Cell[dimX*dimY]),
+			prev_(new Cell[dimX*dimY]) { }
+
+		void swap() {
+			curr_.swap(prev_);
+		}
+
+		inline Cell& curr(std::size_t x, std::size_t y) {
+			return curr_[y*dim_x_ + x];
+		}
+
+		inline Cell& prev(std::size_t x, std::size_t y) {
+			return prev_[y*dim_x_ + x];
+		}
+
+};
+
 constexpr std::size_t dimX = 128;
 constexpr std::size_t dimY = 128;
 
-constexpr double tau = 1.0;
+constexpr double tau = 0.6;
 
-Cell cellsA[dimX][dimY];
-Cell cellsB[dimX][dimY];
-
-Cell (*newCells)[dimX][dimY] = &cellsA;
-Cell (*oldCells)[dimX][dimY] = &cellsB;
+CellBuffer pop(dimX, dimY);
 
 Density  density [dimX][dimY];
 Velocity velocity[dimX][dimY];
 Force    force   [dimX][dimY];
 
-void swapCellBuffers() {
-	if ( newCells == &cellsA && oldCells == &cellsB ) {
-		newCells = &cellsB;
-		oldCells = &cellsA;
-	} else {
-		newCells = &cellsA;
-		oldCells = &cellsB;
-	}
-}
-
 void computeLbmStep(std::size_t t) {
-	swapCellBuffers();
+	pop.swap();
 
 	for ( std::size_t x = 1; x < dimX - 1; ++x ) {
 		for ( std::size_t y = 1; y < dimY - 1; ++y ) {
@@ -85,10 +101,10 @@ void computeLbmStep(std::size_t t) {
 			Cell eq;
 			eq.equilibrize(density[x][y], velocity[x][y]);
 
-			// collide & stream
+			// collide (BGK, relax towards equilibrium) & stream
 			for ( int i = -1; i <= 1; ++i ) {
 				for ( int j = -1; j <= 1; ++j ) {
-					(*newCells)[x+i][y+j].get(i,j) = (*oldCells)[x][y].get(i,j) + 1./tau * (eq.get(i,j) - (*oldCells)[x][y].get(i,j));
+					pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + 1./tau * (eq.get(i,j) - pop.prev(x,y).get(i,j));
 				}
 			}
 		}
@@ -96,46 +112,46 @@ void computeLbmStep(std::size_t t) {
 
 	// straight wall cell bounce back
 	for ( std::size_t x = 2; x < dimX - 2; ++x ) {
-		(*newCells)[x][1].get( 0, 1) = (*newCells)[x][0].get( 0,-1);
-		(*newCells)[x][1].get( 1, 1) = (*newCells)[x][0].get(-1,-1);
-		(*newCells)[x][1].get(-1, 1) = (*newCells)[x][0].get( 1,-1);
+		pop.curr(x,1).get( 0, 1) = pop.curr(x,0).get( 0,-1);
+		pop.curr(x,1).get( 1, 1) = pop.curr(x,0).get(-1,-1);
+		pop.curr(x,1).get(-1, 1) = pop.curr(x,0).get( 1,-1);
 
-		(*newCells)[x][dimY-2].get( 0,-1) = (*newCells)[x][dimY-2].get( 0, 1);
-		(*newCells)[x][dimY-2].get(-1,-1) = (*newCells)[x][dimY-2].get( 1, 1);
-		(*newCells)[x][dimY-2].get( 1,-1) = (*newCells)[x][dimY-2].get(-1, 1);
+		pop.curr(x,dimY-2).get( 0,-1) = pop.curr(x,dimY-2).get( 0, 1);
+		pop.curr(x,dimY-2).get(-1,-1) = pop.curr(x,dimY-2).get( 1, 1);
+		pop.curr(x,dimY-2).get( 1,-1) = pop.curr(x,dimY-2).get(-1, 1);
 	}
 	for ( std::size_t y = 2; y < dimY - 2; ++y ) {
-		(*newCells)[1][y].get( 1, 0) = (*newCells)[0][y].get(-1, 0);
-		(*newCells)[1][y].get( 1,-1) = (*newCells)[0][y].get(-1, 1);
-		(*newCells)[1][y].get( 1, 1) = (*newCells)[0][y].get(-1,-1);
+		pop.curr(1,y).get( 1, 0) = pop.curr(0,y).get(-1, 0);
+		pop.curr(1,y).get( 1,-1) = pop.curr(0,y).get(-1, 1);
+		pop.curr(1,y).get( 1, 1) = pop.curr(0,y).get(-1,-1);
 
-		(*newCells)[dimX-2][y].get(-1, 0) = (*newCells)[dimX - 1][y].get( 1, 0);
-		(*newCells)[dimX-2][y].get(-1, 1) = (*newCells)[dimX - 1][y].get( 1,-1);
-		(*newCells)[dimX-2][y].get(-1,-1) = (*newCells)[dimX - 1][y].get( 1, 1);
+		pop.curr(dimX-2,y).get(-1, 0) = pop.curr(dimX-1,y).get( 1, 0);
+		pop.curr(dimX-2,y).get(-1, 1) = pop.curr(dimX-1,y).get( 1,-1);
+		pop.curr(dimX-2,y).get(-1,-1) = pop.curr(dimX-1,y).get( 1, 1);
 	}
 
 	// edge wall cell bounce back
-	(*newCells)[1][1].get( 0, 1) = (*newCells)[0][0].get( 0,-1);
-	(*newCells)[1][1].get( 1, 1) = (*newCells)[0][0].get(-1,-1);
-	(*newCells)[1][1].get( 1, 0) = (*newCells)[0][0].get(-1, 0);
+	pop.curr(1,1).get( 0, 1) = pop.curr(0,0).get( 0,-1);
+	pop.curr(1,1).get( 1, 1) = pop.curr(0,0).get(-1,-1);
+	pop.curr(1,1).get( 1, 0) = pop.curr(0,0).get(-1, 0);
 
-	(*newCells)[1][dimY-2].get( 0,-1) = (*newCells)[0][dimY-1].get( 0, 1);
-	(*newCells)[1][dimY-2].get( 1,-1) = (*newCells)[0][dimY-1].get(-1, 1);
-	(*newCells)[1][dimY-2].get( 1, 0) = (*newCells)[0][dimY-1].get(-1, 0);
+	pop.curr(1,dimY-2).get( 0,-1) = pop.curr(0,dimY-1).get( 0, 1);
+	pop.curr(1,dimY-2).get( 1,-1) = pop.curr(0,dimY-1).get(-1, 1);
+	pop.curr(1,dimY-2).get( 1, 0) = pop.curr(0,dimY-1).get(-1, 0);
 
-	(*newCells)[dimX-2][1].get( 0, 1) = (*newCells)[dimX-1][0].get( 0,-1);
-	(*newCells)[dimX-2][1].get(-1, 1) = (*newCells)[dimX-1][0].get( 1,-1);
-	(*newCells)[dimX-2][1].get(-1, 0) = (*newCells)[dimX-1][0].get( 1, 0);
+	pop.curr(dimX-2,1).get( 0, 1) = pop.curr(dimX-1,0).get( 0,-1);
+	pop.curr(dimX-2,1).get(-1, 1) = pop.curr(dimX-1,0).get( 1,-1);
+	pop.curr(dimX-2,1).get(-1, 0) = pop.curr(dimX-1,0).get( 1, 0);
 
-	(*newCells)[dimX-2][dimY-2].get( 0,-1) = (*newCells)[dimX-1][dimY-1].get( 0, 1);
-	(*newCells)[dimX-2][dimY-2].get(-1,-1) = (*newCells)[dimX-1][dimY-1].get( 1, 1);
-	(*newCells)[dimX-2][dimY-2].get(-1, 0) = (*newCells)[dimX-1][dimY-1].get( 1, 0);
+	pop.curr(dimX-2,dimY-2).get( 0,-1) = pop.curr(dimX-1,dimY-1).get( 0, 1);
+	pop.curr(dimX-2,dimY-2).get(-1,-1) = pop.curr(dimX-1,dimY-1).get( 1, 1);
+	pop.curr(dimX-2,dimY-2).get(-1, 0) = pop.curr(dimX-1,dimY-1).get( 1, 0);
 
 	// update density, velocity field
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
-			density[x][y]  = (*newCells)[x][y].sum();
-			velocity[x][y] = (*newCells)[x][y].velocity(density[x][y]);
+			density[x][y]  = pop.curr(x,y).sum();
+			velocity[x][y] = pop.curr(x,y).velocity(density[x][y]);
 		}
 	}
 }
@@ -189,8 +205,8 @@ void init() {
 			velocity[x][y] = { 0.0, 0.0 };
 			force[x][y] = { 0.0, 0.0 };
 
-			(*newCells)[x][y].equilibrize(density[x][y], velocity[x][y]);
-			(*oldCells)[x][y].equilibrize(density[x][y], velocity[x][y]);
+			pop.curr(x,y).equilibrize(density[x][y], velocity[x][y]);
+			pop.prev(x,y).equilibrize(density[x][y], velocity[x][y]);
 		}
 	}
 
@@ -207,7 +223,7 @@ void init() {
 int main() {
 	init();
 
-	for ( std::size_t t = 0; t < 100; ++t ) {
+	for ( std::size_t t = 0; t < 500; ++t ) {
 		computeLbmStep(t);
 
 		if ( t % 2 == 0 ) {
