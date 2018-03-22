@@ -89,63 +89,72 @@ Density  density [dimX][dimY];
 Velocity velocity[dimX][dimY];
 Force    force   [dimX][dimY];
 
+void computeFluidCell(std::size_t x, std::size_t y) {
+	// compute equilibrium
+	Cell eq;
+	eq.equilibrize(density[x][y], velocity[x][y]);
+
+	// collide (BGK, relax towards equilibrium) & stream
+	for ( int i = -1; i <= 1; ++i ) {
+		for ( int j = -1; j <= 1; ++j ) {
+			pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + 1./tau * (eq.get(i,j) - pop.prev(x,y).get(i,j));
+		}
+	}
+}
+
+inline int clamp(int x) {
+	return x / -x;
+}
+
+void computeWallCell(std::size_t x, std::size_t y, int normalX, int normalY) {
+	pop.curr(x,y).get(clamp(normalX+normalY),clamp(normalY-normalX)) = pop.curr(x-normalX,y-normalY).get(clamp(normalX-normalY),clamp(normalY+normalX));
+	pop.curr(x,y).get(normalX               ,normalY               ) = pop.curr(x-normalX,y-normalY).get(-normalX,-normalY);
+	pop.curr(x,y).get(clamp(normalX-normalY),clamp(normalY+normalX)) = pop.curr(x-normalX,y-normalY).get(clamp(normalX+normalY),clamp(normalY-normalX));
+}
+
 void computeLbmStep(std::size_t t) {
 	pop.swap();
 
 	for ( std::size_t x = 1; x < dimX - 1; ++x ) {
 		for ( std::size_t y = 1; y < dimY - 1; ++y ) {
-			// update velocity (force coupling)
-			//velocity[x][y] += tau / density[x][y] * force[x][y];
-
-			// compute equilibrium
-			Cell eq;
-			eq.equilibrize(density[x][y], velocity[x][y]);
-
-			// collide (BGK, relax towards equilibrium) & stream
-			for ( int i = -1; i <= 1; ++i ) {
-				for ( int j = -1; j <= 1; ++j ) {
-					pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + 1./tau * (eq.get(i,j) - pop.prev(x,y).get(i,j));
-				}
+			if ( x <= 20 || x >= 40 || y <= 20 || y >= 40 ) {
+				computeFluidCell(x, y);
 			}
 		}
 	}
 
+	// obstacle
+	{
+		for ( std::size_t x = 21; x < 40; ++x ) {
+			computeWallCell(x, 40,  0,  1);
+			computeWallCell(x, 20,  0, -1);
+		}
+		for ( std::size_t y = 21; y < 40; ++y ) {
+			computeWallCell(40, y,  1,  0);
+			computeWallCell(20, y, -1,  0);
+		}
+
+		computeWallCell(40,40, 1, 1);
+		computeWallCell(40,20, 1,-1);
+		computeWallCell(20,40,-1, 1);
+		computeWallCell(20,20,-1,-1);
+	}
+
 	// straight wall cell bounce back
 	for ( std::size_t x = 2; x < dimX - 2; ++x ) {
-		pop.curr(x,1).get( 0, 1) = pop.curr(x,0).get( 0,-1);
-		pop.curr(x,1).get( 1, 1) = pop.curr(x,0).get(-1,-1);
-		pop.curr(x,1).get(-1, 1) = pop.curr(x,0).get( 1,-1);
-
-		pop.curr(x,dimY-2).get( 0,-1) = pop.curr(x,dimY-2).get( 0, 1);
-		pop.curr(x,dimY-2).get(-1,-1) = pop.curr(x,dimY-2).get( 1, 1);
-		pop.curr(x,dimY-2).get( 1,-1) = pop.curr(x,dimY-2).get(-1, 1);
+		computeWallCell(x, 1,      0,  1);
+		computeWallCell(x, dimY-2, 0, -1);
 	}
 	for ( std::size_t y = 2; y < dimY - 2; ++y ) {
-		pop.curr(1,y).get( 1, 0) = pop.curr(0,y).get(-1, 0);
-		pop.curr(1,y).get( 1,-1) = pop.curr(0,y).get(-1, 1);
-		pop.curr(1,y).get( 1, 1) = pop.curr(0,y).get(-1,-1);
-
-		pop.curr(dimX-2,y).get(-1, 0) = pop.curr(dimX-1,y).get( 1, 0);
-		pop.curr(dimX-2,y).get(-1, 1) = pop.curr(dimX-1,y).get( 1,-1);
-		pop.curr(dimX-2,y).get(-1,-1) = pop.curr(dimX-1,y).get( 1, 1);
+		computeWallCell(1,y,1,0);
+		computeWallCell(dimX-2,y,-1,0);
 	}
 
 	// edge wall cell bounce back
-	pop.curr(1,1).get( 0, 1) = pop.curr(0,0).get( 0,-1);
-	pop.curr(1,1).get( 1, 1) = pop.curr(0,0).get(-1,-1);
-	pop.curr(1,1).get( 1, 0) = pop.curr(0,0).get(-1, 0);
-
-	pop.curr(1,dimY-2).get( 0,-1) = pop.curr(0,dimY-1).get( 0, 1);
-	pop.curr(1,dimY-2).get( 1,-1) = pop.curr(0,dimY-1).get(-1, 1);
-	pop.curr(1,dimY-2).get( 1, 0) = pop.curr(0,dimY-1).get(-1, 0);
-
-	pop.curr(dimX-2,1).get( 0, 1) = pop.curr(dimX-1,0).get( 0,-1);
-	pop.curr(dimX-2,1).get(-1, 1) = pop.curr(dimX-1,0).get( 1,-1);
-	pop.curr(dimX-2,1).get(-1, 0) = pop.curr(dimX-1,0).get( 1, 0);
-
-	pop.curr(dimX-2,dimY-2).get( 0,-1) = pop.curr(dimX-1,dimY-1).get( 0, 1);
-	pop.curr(dimX-2,dimY-2).get(-1,-1) = pop.curr(dimX-1,dimY-1).get( 1, 1);
-	pop.curr(dimX-2,dimY-2).get(-1, 0) = pop.curr(dimX-1,dimY-1).get( 1, 0);
+	computeWallCell(1,1,1,1);
+	computeWallCell(1,dimY-2,1,-1);
+	computeWallCell(dimX-2,1,-1,1);
+	computeWallCell(dimX-2,dimY-2,-1,-1);
 
 	// update density, velocity field
 	for ( std::size_t x = 0; x < dimX; ++x ) {
@@ -211,11 +220,8 @@ void init() {
 	}
 
 	for ( std::size_t y = 55; y < dimY-55; ++y ) {
-		for ( std::size_t x = 35; x < dimX-75; ++x ) {
-			density[x][y] = 0.8;
-		}
 		for ( std::size_t x = 75; x < dimX-35; ++x ) {
-			density[x][y] = 0.8;
+			density[x][y] = 0.6;
 		}
 	}
 }
