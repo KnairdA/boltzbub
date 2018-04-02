@@ -13,8 +13,16 @@ struct DataCell {
 		return data[1+x][1-y];
 	}
 
+	inline double& get(Vector<int> v) {
+		return get(v[0], v[1]);
+	}
+
 	inline double get(int x, int y) const {
 		return data[1+x][1-y];
+	}
+
+	inline double get(Vector<int> v) const {
+		return get(v[0], v[1]);
 	}
 };
 
@@ -72,16 +80,23 @@ class CellBuffer {
 			return curr_[y*dim_x_ + x];
 		}
 
+		inline Cell& curr(Vector<std::size_t> pos) {
+			return curr(pos[0], pos[1]);
+		}
+
 		inline Cell& prev(std::size_t x, std::size_t y) {
 			return prev_[y*dim_x_ + x];
 		}
 
+		inline Cell& prev(Vector<std::size_t> pos) {
+			return prev(pos[0], pos[1]);
+		}
 };
 
 constexpr std::size_t dimX = 128;
 constexpr std::size_t dimY = 128;
 
-constexpr double lidVelocityX = 0.1;
+constexpr double lidVelocityX = 0.05;
 constexpr double reynolds     = 1000;
 constexpr double nu           = lidVelocityX * dimX / reynolds;
 constexpr double tau          = 3*nu + 0.5;
@@ -109,49 +124,53 @@ void computeFluidCell(std::size_t x, std::size_t y) {
 
 std::pair<Vector<int>, Vector<int>> neighbors(Vector<int> v) {
 	if ( v[0] == 0 ) {
-		return std::pair<Vector<int>, Vector<int>>{
+		return {
 			{ -1, v[1] },
 			{  1, v[1] }
 		};
 	} else if ( v[1] == 0 ) {
-		return std::pair<Vector<int>, Vector<int>>{
+		return {
 			{ v[0], -1 },
 			{ v[0],  1 }
 		};
 	} else {
-		return std::pair<Vector<int>, Vector<int>>{
+		return {
 			{    0, v[1] },
 			{ v[0], 0    }
 		};
 	}
 }
 
-void computeWallCell(std::size_t x, std::size_t y, Vector<int> normal) {
+void computeWallCell(Vector<std::size_t> cell, Vector<int> normal) {
 	const auto [neighborA, neighborB] = neighbors(normal);
 
-	pop.curr(x,y).get(neighborA[0], neighborA[1]) = pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]);
-	pop.curr(x,y).get(normal[0]   , normal[1]   ) = pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   );
-	pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]);
+	pop.curr(cell).get(neighborA) = pop.curr(cell-neighborA).get(-neighborA);
+	pop.curr(cell).get(normal   ) = pop.curr(cell-normal   ).get(-normal   );
+	pop.curr(cell).get(neighborB) = pop.curr(cell-neighborB).get(-neighborB);
 }
 
-void computeHorizontalMovingWallCell(std::size_t x, std::size_t y, Vector<int> normal, double vX) {
+void computeSimpleVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, double vX) {
 	const auto [neighborA, neighborB] = neighbors(normal);
 
-	const double rho = pop.curr(x-neighborA[0], y-neighborA[1]).get(-1,0) + pop.curr(x-normal[0],y-normal[1]).get(0,0) + pop.curr(x-neighborB[0], y-neighborB[1]).get(1,0)
+	pop.curr(cell).get(neighborA) = pop.curr(cell-neighborA).get(-neighborA) - 6 * weight.get( 1, 1) * density[cell[0]][cell[1]] * vX;
+	pop.curr(cell).get(normal   ) = pop.curr(cell-normal   ).get(-normal   );
+	pop.curr(cell).get(neighborB) = pop.curr(cell-neighborB).get(-neighborB) + 6 * weight.get(-1, 1) * density[cell[0]][cell[0]] * vX;
+}
+
+void computeZouHeVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, double vX) {
+	const auto [neighborA, neighborB] = neighbors(normal);
+
+	const double rho = pop.curr(cell-neighborA).get(-1,0) + pop.curr(cell-normal).get(0,0) + pop.curr(cell-neighborB).get(1,0)
 		+ 2.*(
-			pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) +
-			pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   ) +
-			pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1])
+			pop.curr(cell-neighborA).get(-neighborA) +
+			pop.curr(cell-normal   ).get(-normal   ) +
+			pop.curr(cell-neighborB).get(-neighborB)
 		);
-	const double hor = pop.curr(x-neighborA[0], y-neighborA[1]).get(-1,0) - pop.curr(x-neighborB[0], y-neighborB[1]).get(1,0);
+	const double hor = pop.curr(cell-neighborA).get(-1,0) - pop.curr(cell-neighborB).get(1,0);
 
-	pop.curr(x,y).get(neighborA[0], neighborA[1]) = pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) + 0.5*hor - 0.5*vX*rho;
-	pop.curr(x,y).get(normal[0]   , normal[1]   ) = pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   );
-	pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]) - 0.5*hor + 0.5*vX*rho;
-
-	//pop.curr(x,y).get(neighborA[0], neighborA[1]) = pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) - 6 * weight.get( 1, 1) * density[x][y] * vX;
-	//pop.curr(x,y).get(normal[0]   , normal[1]   ) = pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   );
-	//pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]) + 6 * weight.get(-1, 1) * density[x][y] * vX;
+	pop.curr(cell).get(neighborA) = pop.curr(cell-neighborA).get(-neighborA) + 0.5*hor - 0.5*vX*rho;
+	pop.curr(cell).get(normal   ) = pop.curr(cell-normal   ).get(-normal   );
+	pop.curr(cell).get(neighborB) = pop.curr(cell-neighborB).get(-neighborB) - 0.5*hor + 0.5*vX*rho;
 }
 
 void computeLbmStep(std::size_t t) {
@@ -184,19 +203,19 @@ void computeLbmStep(std::size_t t) {
 
 	// straight wall cell bounce back
 	for ( std::size_t x = 2; x < dimX - 2; ++x ) {
-		computeWallCell(x, 1, { 0, 1});
-		computeHorizontalMovingWallCell(x, dimY-2, { 0,-1}, lidVelocityX);
+		computeWallCell({x, 1}, { 0, 1});
+		computeZouHeVelocityWallCell({x, dimY-2}, { 0,-1}, lidVelocityX);
 	}
 	for ( std::size_t y = 2; y < dimY - 2; ++y ) {
-		computeWallCell(1,      y, { 1, 0});
-		computeWallCell(dimX-2, y, {-1, 0});
+		computeWallCell({1,      y}, { 1, 0});
+		computeWallCell({dimX-2, y}, {-1, 0});
 	}
 
 	// edge wall cell bounce back
-	computeWallCell(1,      1,      { 1, 1});
-	computeWallCell(1,      dimY-2, { 1,-1});
-	computeWallCell(dimX-2, 1,      {-1, 1});
-	computeWallCell(dimX-2, dimY-2, {-1,-1});
+	computeWallCell({1,      1     }, { 1, 1});
+	computeWallCell({1,      dimY-2}, { 1,-1});
+	computeWallCell({dimX-2, 1     }, {-1, 1});
+	computeWallCell({dimX-2, dimY-2}, {-1,-1});
 
 	// update density, velocity field
 	for ( std::size_t x = 0; x < dimX; ++x ) {
@@ -218,12 +237,6 @@ void init() {
 			pop.prev(x,y).equilibrize(density[x][y], velocity[x][y]);
 		}
 	}
-
-	/*for ( std::size_t y = 50; y < dimY-50; ++y ) {
-		for ( std::size_t x = 50; x < dimX-50; ++x ) {
-			density[x][y] = 2.0;
-		}
-	}*/
 }
 
 void writeCurrentStateAsVTK(int time) {

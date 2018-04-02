@@ -31,6 +31,10 @@ struct Vector {
 		};
 	}
 
+	Vector<T> operator-() const {
+		return -1 * *this;
+	}
+
 	Vector<T>& operator+=(const Vector<T>& rhs) {
 		data[0] += rhs[0];
 		data[1] += rhs[1];
@@ -39,9 +43,25 @@ struct Vector {
 };
 
 template <typename T>
-Vector<T> operator*(T scalar, const Vector<T>& vec) {
+Vector<T> operator*(T scalar, const Vector<T>& v) {
 	return Vector<T>{
-		vec[0] * scalar,
-		vec[1] * scalar
+		v[0] * scalar,
+		v[1] * scalar
+	};
+}
+
+template <typename T, typename W>
+Vector<T> operator-(const Vector<T>& a, const Vector<W>& b) {
+	return Vector<T>{
+		a[0] - b[0],
+		a[1] - b[1]
+	};
+}
+
+template <typename T, typename W>
+Vector<T> operator+(const Vector<T>& a, const Vector<W>& b) {
+	return Vector<T>{
+		a[0] + b[0],
+		a[1] + b[1]
 	};
 }
