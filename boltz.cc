@@ -81,7 +81,12 @@ class CellBuffer {
 constexpr std::size_t dimX = 128;
 constexpr std::size_t dimY = 128;
 
-constexpr double tau = 0.8;
+constexpr double lidVelocityX = 0.1;
+constexpr double reynolds     = 1000;
+constexpr double nu           = lidVelocityX * dimX / reynolds;
+constexpr double tau          = 3*nu + 0.5;
+
+constexpr double omega = 1. / tau;
 
 CellBuffer pop(dimX, dimY);
 
@@ -90,8 +95,6 @@ Velocity velocity[dimX][dimY];
 Force    force   [dimX][dimY];
 
 void computeFluidCell(std::size_t x, std::size_t y) {
-	//velocity[x][y] += tau / density[x][y] * force[x][y];
-
 	// compute equilibrium
 	Cell eq;
 	eq.equilibrize(density[x][y], velocity[x][y]);
@@ -99,7 +102,7 @@ void computeFluidCell(std::size_t x, std::size_t y) {
 	// collide (BGK, relax towards equilibrium) & stream
 	for ( int i = -1; i <= 1; ++i ) {
 		for ( int j = -1; j <= 1; ++j ) {
-			pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + 1./tau * (eq.get(i,j) - pop.prev(x,y).get(i,j));
+			pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + omega * (eq.get(i,j) - pop.prev(x,y).get(i,j));
 		}
 	}
 }
@@ -131,19 +134,39 @@ void computeWallCell(std::size_t x, std::size_t y, Vector<int> normal) {
 	pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]);
 }
 
+void computeHorizontalMovingWallCell(std::size_t x, std::size_t y, Vector<int> normal, double vX) {
+	const auto [neighborA, neighborB] = neighbors(normal);
+
+	const double rho = pop.curr(x-neighborA[0], y-neighborA[1]).get(-1,0) + pop.curr(x-normal[0],y-normal[1]).get(0,0) + pop.curr(x-neighborB[0], y-neighborB[1]).get(1,0)
+		+ 2.*(
+			pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) +
+			pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   ) +
+			pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1])
+		);
+	const double hor = pop.curr(x-neighborA[0], y-neighborA[1]).get(-1,0) - pop.curr(x-neighborB[0], y-neighborB[1]).get(1,0);
+
+	pop.curr(x,y).get(neighborA[0], neighborA[1]) = pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) + 0.5*hor - 0.5*vX*rho;
+	pop.curr(x,y).get(normal[0]   , normal[1]   ) = pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   );
+	pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]) - 0.5*hor + 0.5*vX*rho;
+
+	//pop.curr(x,y).get(neighborA[0], neighborA[1]) = pop.curr(x-neighborA[0], y-neighborA[1]).get(-neighborA[0], -neighborA[1]) - 6 * weight.get( 1, 1) * density[x][y] * vX;
+	//pop.curr(x,y).get(normal[0]   , normal[1]   ) = pop.curr(x-normal[0]   , y-normal[1]   ).get(-normal[0]   , -normal[1]   );
+	//pop.curr(x,y).get(neighborB[0], neighborB[1]) = pop.curr(x-neighborB[0], y-neighborB[1]).get(-neighborB[0], -neighborB[1]) + 6 * weight.get(-1, 1) * density[x][y] * vX;
+}
+
 void computeLbmStep(std::size_t t) {
 	pop.swap();
 
 	for ( std::size_t x = 1; x < dimX - 1; ++x ) {
 		for ( std::size_t y = 1; y < dimY - 1; ++y ) {
-			if ( x <= 20 || x >= 40 || y <= 20 || y >= 80 ) {
+			//if ( x <= 20 || x >= 40 || y <= 20 || y >= 80 ) {
 				computeFluidCell(x, y);
-			}
+			//}
 		}
 	}
 
 	// obstacle
-	{
+	/*{
 		for ( std::size_t x = 21; x < 40; ++x ) {
 			computeWallCell(x, 80, { 0, 1});
 			computeWallCell(x, 20, { 0,-1});
@@ -157,12 +180,12 @@ void computeLbmStep(std::size_t t) {
 		computeWallCell(40, 20, { 1,-1});
 		computeWallCell(20, 80, {-1, 1});
 		computeWallCell(20, 20, {-1,-1});
-	}
+	}*/
 
 	// straight wall cell bounce back
 	for ( std::size_t x = 2; x < dimX - 2; ++x ) {
-		computeWallCell(x, 1,     { 0, 1});
-		computeWallCell(x, dimY-2,{ 0,-1});
+		computeWallCell(x, 1, { 0, 1});
+		computeHorizontalMovingWallCell(x, dimY-2, { 0,-1}, lidVelocityX);
 	}
 	for ( std::size_t y = 2; y < dimY - 2; ++y ) {
 		computeWallCell(1,      y, { 1, 0});
@@ -196,11 +219,11 @@ void init() {
 		}
 	}
 
-	for ( std::size_t y = 50; y < dimY-50; ++y ) {
+	/*for ( std::size_t y = 50; y < dimY-50; ++y ) {
 		for ( std::size_t x = 50; x < dimX-50; ++x ) {
 			density[x][y] = 2.0;
 		}
-	}
+	}*/
 }
 
 void writeCurrentStateAsVTK(int time) {
@@ -248,10 +271,14 @@ void writeCurrentStateAsVTK(int time) {
 int main() {
 	init();
 
-	for ( std::size_t t = 0; t < 1000; ++t ) {
+	std::cout << "u: " << lidVelocityX << std::endl;
+	std::cout << "tau: " << tau << std::endl;
+
+	for ( std::size_t t = 0; t < 20000; ++t ) {
 		computeLbmStep(t);
 
-		if ( t % 2 == 0 ) {
+		if ( t % 1000 == 0 ) {
+			std::cout << "Writing " << t << "." << std::endl;
 			writeCurrentStateAsVTK(t);
 		}
 	}
