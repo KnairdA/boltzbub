@@ -4,7 +4,7 @@
 #include <fstream>
 #include <memory>
 
-#include "src/vector.h"
+#include "vector.h"
 
 struct DataCell {
 	double data[3][3];
