@@ -92,45 +92,6 @@ class CellBuffer {
 		}
 };
 
-constexpr std::size_t dimX = 256;
-constexpr std::size_t dimY = 256;
-
-constexpr double tau          = 2./3.;
-constexpr int    reynolds     = 1000;
-constexpr double lidVelocityX = reynolds * (2.*tau - 1.) / (6.*(dimX - 1.));
-
-constexpr double omega = 1. / tau;
-
-CellBuffer pop(dimX, dimY);
-
-Density  density [dimX][dimY];
-Velocity velocity[dimX][dimY];
-
-void computeFluidCell(std::size_t x, std::size_t y) {
-	// compute equilibrium
-	Cell eq;
-	eq.equilibrize(density[x][y], velocity[x][y]);
-
-	// collide (BGK, relax towards equilibrium) & stream
-	if ( x != 0 && x != dimX - 1 && y != 0 && y != dimY -1 ) {
-		for ( int i = -1; i <= 1; ++i ) {
-			for ( int j = -1; j <= 1; ++j ) {
-				pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + omega * (eq.get(i,j) - pop.prev(x,y).get(i,j));
-			}
-		}
-	} else {
-		// partial collide and stream for boundary cells,
-		// remaining populations to be determined by boundary conditions
-		for ( int i = -1; i <= 1; ++i ) {
-			for ( int j = -1; j <= 1; ++j ) {
-				if ( x+i >= 0 && x+i <= dimX - 1 && y+j >= 0 && y+j <= dimY - 1 ) {
-					pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j) + omega * (eq.get(i,j) - pop.prev(x,y).get(i,j));
-				}
-			}
-		}
-	}
-}
-
 std::pair<Vector<int>, Vector<int>> neighbors(Vector<int> v) {
 	if ( v[0] == 0 ) {
 		return {
@@ -150,20 +111,71 @@ std::pair<Vector<int>, Vector<int>> neighbors(Vector<int> v) {
 	}
 }
 
+constexpr std::size_t dimX = 256;
+constexpr std::size_t dimY = dimX;
+
+constexpr double uLid     = 0.1;
+constexpr double reynolds = 1000;
+
+constexpr double tau   = 3 * uLid * (dimX-1) / reynolds + 0.5;
+constexpr double omega = 1. / tau;
+
+CellBuffer pop(dimX, dimY);
+
+Density  density [dimX][dimY];
+Velocity velocity[dimX][dimY];
+
+void streamFluidCell(std::size_t x, std::size_t y) {
+	if ( x != 0 && x != dimX - 1 && y != 0 && y != dimY -1 ) {
+		// stream internal cells
+		for ( int i = -1; i <= 1; ++i ) {
+			for ( int j = -1; j <= 1; ++j ) {
+				pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j);
+			}
+		}
+	} else {
+		// stream boundary cells,
+		// missing populations to be determined by boundary conditions
+		for ( int i = -1; i <= 1; ++i ) {
+			for ( int j = -1; j <= 1; ++j ) {
+				if ( x+i >= 0 && x+i <= dimX - 1 && y+j >= 0 && y+j <= dimY - 1 ) {
+					pop.curr(x+i,y+j).get(i,j) = pop.prev(x,y).get(i,j);
+				}
+			}
+		}
+	}
+}
+
+void collideFluidCell(std::size_t x, std::size_t y) {
+	// compute equilibrium
+	Cell eq;
+	eq.equilibrize(density[x][y], velocity[x][y]);
+
+	// collide (BGK, relax towards equilibrium)
+	if ( x != 0 && x != dimX - 1 && y != 0 && y != dimY -1 ) {
+		for ( int i = -1; i <= 1; ++i ) {
+			for ( int j = -1; j <= 1; ++j ) {
+				pop.curr(x,y).get(i,j) = pop.curr(x,y).get(i,j) + omega * (eq.get(i,j) - pop.curr(x,y).get(i,j));
+			}
+		}
+	} else {
+		// partial collide for boundary cells
+		for ( int i = -1; i <= 1; ++i ) {
+			for ( int j = -1; j <= 1; ++j ) {
+				if ( x+i >= 0 && x+i <= dimX - 1 && y+j >= 0 && y+j <= dimY - 1 ) {
+					pop.curr(x,y).get(i,j) = pop.curr(x,y).get(i,j) + omega * (eq.get(i,j) - pop.curr(x,y).get(i,j));
+				}
+			}
+		}
+	}
+}
+
 void computeWallCell(Vector<std::size_t> cell, Vector<int> normal) {
 	const auto [neighborA, neighborB] = neighbors(normal);
 
 	pop.curr(cell).get(neighborA) = pop.curr(cell).get(-neighborA);
 	pop.curr(cell).get(normal   ) = pop.curr(cell).get(-normal   );
 	pop.curr(cell).get(neighborB) = pop.curr(cell).get(-neighborB);
-}
-
-void computeSimpleVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, double vX) {
-	const auto [neighborA, neighborB] = neighbors(normal);
-
-	pop.curr(cell).get(neighborA) = pop.curr(cell).get(-neighborA) - 6 * weight.get( 1, 1) * density[cell[0]][cell[1]] * vX;
-	pop.curr(cell).get(normal   ) = pop.curr(cell).get(-normal   );
-	pop.curr(cell).get(neighborB) = pop.curr(cell).get(-neighborB) + 6 * weight.get(-1, 1) * density[cell[0]][cell[0]] * vX;
 }
 
 void computeZouHeVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, double vX) {
@@ -184,17 +196,18 @@ void computeZouHeVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, 
 void computeLbmStep(std::size_t t) {
 	pop.swap();
 
-	for ( std::size_t x = 1; x < dimX-1; ++x ) {
+	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
-			computeFluidCell(x, y);
+			streamFluidCell(x, y);
 		}
 	}
 
 	// straight wall cell bounce back
 	for ( std::size_t x = 0; x < dimX; ++x ) {
+		computeZouHeVelocityWallCell({x, dimY-1}, { 0,-1}, uLid);
+	}
+	for ( std::size_t x = 1; x < dimX-1; ++x ) {
 		computeWallCell({x, 0}, { 0, 1});
-		computeZouHeVelocityWallCell({x, dimY-1}, { 0,-1}, lidVelocityX);
-		//computeSimpleVelocityWallCell({x, dimY-1}, { 0,-1}, lidVelocityX);
 	}
 	for ( std::size_t y = 1; y < dimY-1; ++y ) {
 		computeWallCell({0,      y}, { 1, 0});
@@ -202,16 +215,15 @@ void computeLbmStep(std::size_t t) {
 	}
 
 	// edge wall cell bounce back
-	//computeWallCell({0,      dimY-1}, { 1,-1});
-	//computeWallCell({dimX-1, dimY-1}, {-1,-1});
-	//computeWallCell({0,      0     }, { 1, 1});
-	//computeWallCell({dimX-1, 0     }, {-1, 1});
+	computeWallCell({0,      0 }, { 1, 1});
+	computeWallCell({dimX-1, 0 }, {-1, 1});
 
-	// update density, velocity field
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
 			density[x][y]  = pop.curr(x,y).sum();
 			velocity[x][y] = pop.curr(x,y).velocity(density[x][y]);
+
+			collideFluidCell(x, y);
 		}
 	}
 }
@@ -273,15 +285,19 @@ void writeCurrentStateAsVTK(int time) {
 int main() {
 	init();
 
-	std::cout << "tau: " << tau << std::endl;
-	std::cout << "u: " << lidVelocityX << std::endl;
+	std::cout << "Re:   " << reynolds << std::endl;
+	std::cout << "uLid: " << uLid     << std::endl;
+	std::cout << "tau:  " << tau      << std::endl;
 
-	for ( std::size_t t = 0; t <= 40000; ++t ) {
+	for ( std::size_t t = 0; t <= 100000; ++t ) {
 		computeLbmStep(t);
 
-		if ( t < 100 || t % 1000 == 0 ) {
-			std::cout << "Writing " << t << "." << std::endl;
+		if ( (t < 1000 && t % 10 == 0) || t % 1000 == 0 ) {
+			std::cout << ".";
+			std::cout.flush();
 			writeCurrentStateAsVTK(t);
 		}
 	}
+
+	std::cout << std::endl;
 }
