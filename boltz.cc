@@ -3,6 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <vector>
+#include <algorithm>
 
 #include "vector.h"
 
@@ -111,10 +113,10 @@ std::pair<Vector<int>, Vector<int>> neighbors(Vector<int> v) {
 	}
 }
 
-constexpr std::size_t dimX = 256;
+constexpr std::size_t dimX = 120;
 constexpr std::size_t dimY = dimX;
 
-constexpr double uLid     = 0.1;
+constexpr double uLid     = 0.3;
 constexpr double reynolds = 1000;
 
 constexpr double tau   = 3 * uLid * (dimX-1) / reynolds + 0.5;
@@ -193,12 +195,60 @@ void computeZouHeVelocityWallCell(Vector<std::size_t> cell, Vector<int> normal, 
 	pop.curr(cell).get(neighborB) = pop.curr(cell).get(-neighborB) + 0.5*(pop.curr(cell).get(-1,0) - pop.curr(cell).get( 1,0) + vX*rho);
 }
 
+struct BoxObstacle {
+	const std::size_t lower_x_;
+	const std::size_t lower_y_;
+	const std::size_t upper_x_;
+	const std::size_t upper_y_;
+
+	BoxObstacle(std::size_t lX, std::size_t lY, std::size_t uX, std::size_t uY):
+		lower_x_(lX), lower_y_(lY), upper_x_(uX), upper_y_(uY) { }
+
+	bool isInside(std::size_t x, std::size_t y) const {
+		return x > lower_x_
+		    && x < upper_x_
+		    && y > lower_y_
+		    && y < upper_y_;
+	}
+
+	void applyBoundary() const {
+		for ( std::size_t x = lower_x_+1; x < upper_x_; ++x ) {
+			computeWallCell({x, lower_y_}, { 0,-1});
+			computeWallCell({x, upper_y_}, { 0, 1});
+		}
+		for ( std::size_t y = lower_y_+1; y < upper_y_; ++y ) {
+			computeWallCell({lower_x_, y}, {-1, 0});
+			computeWallCell({upper_x_, y}, { 1, 0});
+		}
+		computeWallCell({lower_x_, lower_y_}, {-1,-1});
+		computeWallCell({upper_x_, lower_y_}, { 1,-1});
+		computeWallCell({upper_x_, upper_y_}, { 1, 1});
+		computeWallCell({lower_x_, upper_y_}, {-1, 1});
+	}
+};
+
+std::vector<BoxObstacle> obstacles{
+	{20, 20,  40,  40},
+	{50, 20,  70,  40},
+	{80, 20, 100,  40},
+	{20, 50,  40,  70},
+	{50, 50,  70,  70},
+	{80, 50, 100,  70},
+	{20, 80,  40, 100},
+	{50, 80,  70, 100},
+	{80, 80, 100, 100},
+};
+
 void computeLbmStep(std::size_t t) {
 	pop.swap();
 
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
-			streamFluidCell(x, y);
+			if ( std::all_of(obstacles.cbegin(), obstacles.cend(), [x, y](const auto& o) -> bool {
+				return !o.isInside(x, y);
+			}) ) {
+				streamFluidCell(x, y);
+			}
 		}
 	}
 
@@ -218,12 +268,21 @@ void computeLbmStep(std::size_t t) {
 	computeWallCell({0,      0 }, { 1, 1});
 	computeWallCell({dimX-1, 0 }, {-1, 1});
 
+	// obstacles
+	for ( auto& o : obstacles ) {
+		o.applyBoundary();
+	}
+
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
 			density[x][y]  = pop.curr(x,y).sum();
 			velocity[x][y] = pop.curr(x,y).velocity(density[x][y]);
 
-			collideFluidCell(x, y);
+			if ( std::all_of(obstacles.cbegin(), obstacles.cend(), [x, y](const auto& o) -> bool {
+				return !o.isInside(x, y);
+			}) ) {
+				collideFluidCell(x, y);
+			}
 		}
 	}
 }
@@ -289,10 +348,10 @@ int main() {
 	std::cout << "uLid: " << uLid     << std::endl;
 	std::cout << "tau:  " << tau      << std::endl;
 
-	for ( std::size_t t = 0; t <= 100000; ++t ) {
+	for ( std::size_t t = 0; t <= 6000; ++t ) {
 		computeLbmStep(t);
 
-		if ( (t < 1000 && t % 10 == 0) || t % 1000 == 0 ) {
+		if ( t % 100 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
 			writeCurrentStateAsVTK(t);
