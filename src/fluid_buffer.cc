@@ -32,9 +32,9 @@ Velocity& FluidBuffer::velocity(Vector<std::size_t> pos) {
 	return velocity(pos[0], pos[1]);
 }
 
-void FluidBuffer::writeAsVTK(int time) {
+void FluidBuffer::writeAsVTK(const std::string& path) {
 	std::ofstream fout;
-	fout.open(("result/data_t" + std::to_string(time) + ".vtk").c_str());
+	fout.open(path.c_str());
 
 	fout << "# vtk DataFile Version 3.0\n";
 	fout << "lbm_output\n";

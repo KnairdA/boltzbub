@@ -1,5 +1,6 @@
 #include <iostream>
 #include <vector>
+#include <string>
 #include <algorithm>
 
 #include "lbm.h"
@@ -106,7 +107,7 @@ int main() {
 		if ( t % 100 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
-			fluid.writeAsVTK(t);
+			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");
 		}
 	}
 
