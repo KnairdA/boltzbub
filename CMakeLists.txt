@@ -13,4 +13,8 @@ include_directories(
 add_executable(
 	boltz
 		boltz.cc
+		src/lbm.cc
+		src/fluid_buffer.cc
+		src/boundary_conditions.cc
+		src/box_obstacle.cc
 )
