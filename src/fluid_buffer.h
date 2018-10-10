@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <filesystem>
 
 #include "vector.h"
 
@@ -28,5 +29,5 @@ public:
 	Velocity& velocity(std::size_t x, std::size_t y);
 	Velocity& velocity(Vector<std::size_t> pos);
 
-	void writeAsVTK(const std::string& path);
+	void writeAsVTK(const std::filesystem::path& path);
 };

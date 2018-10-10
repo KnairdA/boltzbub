@@ -32,7 +32,9 @@ Velocity& FluidBuffer::velocity(Vector<std::size_t> pos) {
 	return velocity(pos[0], pos[1]);
 }
 
-void FluidBuffer::writeAsVTK(const std::string& path) {
+void FluidBuffer::writeAsVTK(const std::filesystem::path& path) {
+	std::filesystem::create_directories(path.parent_path());
+
 	std::ofstream fout;
 	fout.open(path.c_str());
 

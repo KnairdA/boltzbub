@@ -1,12 +1,12 @@
 with import <nixpkgs> {};
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   name = "boltzbub-env";
   env = buildEnv { name = name; paths = buildInputs; };
 
   buildInputs = [
     git
-    gcc
+    gcc8
     cmake
   ];
 
