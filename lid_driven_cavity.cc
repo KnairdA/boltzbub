@@ -1,7 +1,4 @@
 #include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
 
 #include "lbm.h"
 #include "boundary_conditions.h"
