@@ -1,9 +1,16 @@
 #include "lbm.h"
 
+#include <iostream>
+
 void Cell::equilibrize(Density d, Velocity v) {
 	for ( int i = -1; i <= 1; ++i ) {
 		for ( int j = -1; j <= 1; ++j ) {
 			get(i,j) = weight.get(i,j) * d * (1 + 3*v.comp(i,j) + 4.5*sq(v.comp(i,j)) - 1.5*sq(v.norm()));
+
+			if ( std::isnan(get(i,j)) ) {
+				std::cerr << "Instability detected!" << std::endl;
+				std::exit(-1);
+			}
 		}
 	}
 }
