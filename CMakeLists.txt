@@ -27,22 +27,22 @@ target_link_libraries(
 )
 
 add_executable(
-	cavity2d
-		cavity2d.cc
+	lid_driven_cavity
+		lid_driven_cavity.cc
 )
 
 target_link_libraries(
-	cavity2d
+	lid_driven_cavity
 		boltzbub
 )
 
 add_executable(
-	cavity2d_with_obstacles
-		cavity2d_with_obstacles.cc
+	lid_driven_cavity_with_obstacles
+		lid_driven_cavity_with_obstacles.cc
 		src/box_obstacle.cc
 )
 
 target_link_libraries(
-	cavity2d_with_obstacles
+	lid_driven_cavity_with_obstacles
 		boltzbub
 )
