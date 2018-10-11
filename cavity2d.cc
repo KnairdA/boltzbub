@@ -6,13 +6,13 @@
 #include "lbm.h"
 #include "boundary_conditions.h"
 
-constexpr std::size_t dimX = 64;
+constexpr std::size_t dimX = 100;
 constexpr std::size_t dimY = dimX;
 
-constexpr double uLid     = 0.1;
-constexpr double reynolds = 100;
+constexpr double uLid     = 0.4;
+constexpr double reynolds = 1000;
 
-constexpr double tau   = 3 * uLid * (dimX-1) / reynolds + 0.5;
+constexpr double tau   = 3. * uLid * (dimX-1) / reynolds + 0.5;
 constexpr double omega = 1. / tau;
 
 DataCellBuffer pop(dimX, dimY);
@@ -71,11 +71,12 @@ void computeLbmStep() {
 int main() {
 	init();
 
-	std::cout << "Re:   " << reynolds << std::endl;
-	std::cout << "uLid: " << uLid     << std::endl;
-	std::cout << "tau:  " << tau      << std::endl;
+	std::cout << "Re:    " << reynolds << std::endl;
+	std::cout << "uLid:  " << uLid     << std::endl;
+	std::cout << "tau:   " << tau      << std::endl;
+	std::cout << "omega: " << omega    << std::endl;
 
-	for ( std::size_t t = 0; t <= 6000; ++t ) {
+	for ( std::size_t t = 0; t <= 10000; ++t ) {
 		computeLbmStep();
 
 		if ( t % 100 == 0 ) {
