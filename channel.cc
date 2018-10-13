@@ -93,7 +93,7 @@ int main() {
 	for ( std::size_t t = 0; t <= 5000; ++t ) {
 		computeLbmStep();
 
-		if ( t % 50 == 0 ) {
+		if ( t % 100 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
 			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");

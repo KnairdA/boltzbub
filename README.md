@@ -1,15 +1,23 @@
 # boltzbub
 
-…Lattice Boltzmann code experiment written in C++ that is to a full LBM code as a boy is to a man.
+…simple Lattice Boltzmann code experiments written in C++.
 
-![lid driven cavity with a grid of boxes visualized using ParaView](screenshot/lid_driven_cavity_with_box_grid.png)
+![channel flow visualized using ParaView](screenshot/channel_flow.png)
+
+## Experiments
+
+| Code                                  | Description                                                                                                    |
+| -                                     | -                                                                                                              |
+| `lid_driven_cavity.cc`                | Lid driven cavity using Zou/He boundary conditions for the top wall and simple bounce back for all other walls |
+| `lid_driven_cavity_with_obstacles.cc` | Same as `lid_driven_cavity.cc` but includes a grid of boxes to make things more interesting                    |
+| `channel.cc`                          | Channel flow some obstacles and Dirichlet inflow                                                               |
 
 ## Build
 
 	git clone https://github.com/KnairdA/boltzbub.git
 	cd boltzbub
 	nix-shell
-	mkdir --parents build/result
+	mkdir build
 	cd build
 	cmake ..
 	make
