@@ -63,7 +63,7 @@ void computeLbmStep() {
 
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
-			if ( x == 0 ) {
+			if ( x == 0 && y > 0 && y < dimY-1 ) {
 				// inflow
 				fluid.density(x,y)  = 1.0;
 				fluid.velocity(x,y) = { uInflow, 0 };
