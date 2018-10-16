@@ -5,4 +5,6 @@
 
 void computeWallCell(DataCellBuffer& pop, Vector<std::size_t> cell, Vector<int> normal);
 
+void computeMovingWallCell(DataCellBuffer& pop, Vector<std::size_t> cell, Vector<int> normal, Vector<double> u);
+
 void computeZouHeVelocityWallCell(DataCellBuffer& pop, Vector<std::size_t> cell, Vector<int> normal, double vX);

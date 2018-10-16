@@ -9,8 +9,8 @@
 constexpr std::size_t dimX = 500;
 constexpr std::size_t dimY = 40;
 
-constexpr double uInflow  = 0.1;
-constexpr double reynolds = 1000;
+constexpr double uInflow  = 0.01;
+constexpr double reynolds = 100;
 
 constexpr double tau   = 3. * uInflow * (dimX-1) / reynolds + 0.5;
 constexpr double omega = 1. / tau;
@@ -56,6 +56,10 @@ void computeLbmStep() {
 		computeWallCell(pop, {x, dimY-1}, { 0,-1});
 	}
 
+	for ( std::size_t y = 1; y < dimY-1; ++y ) {
+		computeMovingWallCell(pop, {0,y}, {1,0}, {uInflow,0});
+	}
+
 	// obstacles
 	for ( const auto& box : obstacles ) {
 		box.applyBoundary(pop);
@@ -63,15 +67,17 @@ void computeLbmStep() {
 
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
-			if ( x == 0 && y > 0 && y < dimY-1 ) {
-				// inflow
-				fluid.density(x,y)  = 1.0;
-				fluid.velocity(x,y) = { uInflow, 0 };
-			} else {
-				Cell& cell = static_cast<Cell&>(pop.curr(x,y));
-				fluid.density(x,y)  = cell.sum();
-				fluid.velocity(x,y) = cell.velocity(fluid.density(x,y));
+			Cell& cell = static_cast<Cell&>(pop.curr(x,y));
+
+			// bulk density
+			fluid.density(x,y) = cell.sum();
+
+			// outflow
+			if ( x == dimX-1 && y > 0 && y < dimY-1 ) {
+				fluid.density(x,y) = 1.0;
 			}
+
+			fluid.velocity(x,y) = cell.velocity(fluid.density(x,y));
 
 			if ( std::all_of(obstacles.cbegin(), obstacles.cend(), [x, y](const auto& o) {
 				return !o.isInside(x, y);
@@ -90,10 +96,10 @@ int main() {
 	std::cout << "tau:     " << tau      << std::endl;
 	std::cout << "omega:   " << omega    << std::endl;
 
-	for ( std::size_t t = 0; t <= 5000; ++t ) {
+	for ( std::size_t t = 0; t <= 10000; ++t ) {
 		computeLbmStep();
 
-		if ( t % 100 == 0 ) {
+		if ( t % 1000 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
 			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");

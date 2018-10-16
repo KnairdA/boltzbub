@@ -38,10 +38,12 @@ void computeLbmStep() {
 		}
 	}
 
-	// straight wall cell bounce back
+	// moving top wall
 	for ( std::size_t x = 0; x < dimX; ++x ) {
-		computeZouHeVelocityWallCell(pop, {x, dimY-1}, { 0,-1}, uLid);
+		computeMovingWallCell(pop, {x, dimY-1}, {0, -1}, {uLid, 0});
 	}
+
+	// straight wall cell bounce back
 	for ( std::size_t x = 1; x < dimX-1; ++x ) {
 		computeWallCell(pop, {x, 0}, { 0, 1});
 	}
@@ -76,7 +78,7 @@ int main() {
 	for ( std::size_t t = 0; t <= 10000; ++t ) {
 		computeLbmStep();
 
-		if ( t % 100 == 0 ) {
+		if ( t % 1000 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
 			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");

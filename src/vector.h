@@ -53,6 +53,11 @@ Vector<T> operator*(T scalar, const Vector<T>& v) {
 }
 
 template <typename T, typename W>
+decltype(T{}*W{}) operator*(const Vector<T>& a, const Vector<W>& b) {
+	return a[0]*b[0] + a[1]*b[1];
+}
+
+template <typename T, typename W>
 Vector<T> operator-(const Vector<T>& a, const Vector<W>& b) {
 	return Vector<T>{
 		a[0] - b[0],
