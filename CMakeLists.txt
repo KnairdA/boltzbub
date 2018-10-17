@@ -56,3 +56,13 @@ target_link_libraries(
 	channel
 		boltzbub
 )
+
+add_executable(
+	poiseuille
+		poiseuille.cc
+)
+
+target_link_libraries(
+	poiseuille
+		boltzbub
+)
