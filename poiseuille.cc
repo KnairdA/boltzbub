@@ -5,7 +5,7 @@
 #include "lbm.h"
 #include "boundary_conditions.h"
 
-constexpr std::size_t dimY = 40;
+constexpr std::size_t dimY = 20;
 constexpr std::size_t dimX = 5*dimY;
 
 constexpr double uInflow  = 0.02;
@@ -17,11 +17,15 @@ constexpr double omega = 1. / tau;
 DataCellBuffer pop(dimX, dimY);
 FluidBuffer fluid(dimX, dimY);
 
+double poiseuille(std::size_t y) {
+	return -4. * uInflow / (dimY*dimY) * (y+0.5) * (y+0.5 - dimY);
+}
+
 void init() {
 	for ( std::size_t x = 0; x < dimX; ++x ) {
 		for ( std::size_t y = 0; y < dimY; ++y ) {
 			fluid.density(x,y)  = 1.0;
-			fluid.velocity(x,y) = { 0.0, 0.0 };
+			fluid.velocity(x,y) = {0.0, 0.0};
 
 			static_cast<Cell&>(pop.curr(x,y)).equilibrize(
 				fluid.density(x,y), fluid.velocity(x,y));
@@ -46,8 +50,7 @@ void computeLbmStep() {
 	}
 
 	for ( std::size_t y = 1; y < dimY-1; ++y ) {
-		const double localU = -4. * uInflow / (dimY*dimY) * y * (double(y)-dimY);
-		computeMovingWallCell(pop, {0,y}, {1,0}, {localU,0});
+		computeMovingWallCell(pop, {0,y}, {1,0}, {poiseuille(y), 0});
 	}
 
 	for ( std::size_t x = 0; x < dimX; ++x ) {
@@ -80,7 +83,7 @@ int main() {
 	for ( std::size_t t = 0; t <= 10000; ++t ) {
 		computeLbmStep();
 
-		if ( t % 1000 == 0 ) {
+		if ( t % 100 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
 			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");
