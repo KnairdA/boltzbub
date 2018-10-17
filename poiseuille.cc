@@ -9,7 +9,7 @@ constexpr std::size_t dimY = 20;
 constexpr std::size_t dimX = 5*dimY;
 
 constexpr double uInflow  = 0.02;
-constexpr double reynolds = 10;
+constexpr double reynolds = 100;
 
 constexpr double tau   = 3. * uInflow * (dimX-1) / reynolds + 0.5;
 constexpr double omega = 1. / tau;
@@ -72,23 +72,33 @@ void computeLbmStep() {
 	}
 }
 
+double error(std::size_t x) {
+	double acc = 0.0;
+
+	for ( std::size_t y = 1; y < dimY-1; ++y ) {
+		acc += std::abs(poiseuille(y) - fluid.velocity(x,y)[0]);
+	}
+
+	return acc / (dimY-2);
+}
+
 int main() {
 	init();
 
+	std::cout << "dim:     " << dimX << "x" << dimY << std::endl;
 	std::cout << "Re:      " << reynolds << std::endl;
 	std::cout << "uInflow: " << uInflow  << std::endl;
 	std::cout << "tau:     " << tau      << std::endl;
 	std::cout << "omega:   " << omega    << std::endl;
 
+	std::cout << std::endl;
+
 	for ( std::size_t t = 0; t <= 10000; ++t ) {
 		computeLbmStep();
 
-		if ( t % 100 == 0 ) {
-			std::cout << ".";
-			std::cout.flush();
+		if ( t % 1000 == 0 ) {
+			std::cout << error(dimX-1) << std::endl;
 			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");
 		}
 	}
-
-	std::cout << std::endl;
 }
