@@ -81,7 +81,7 @@ int main() {
 		if ( t % 1000 == 0 ) {
 			std::cout << ".";
 			std::cout.flush();
-			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");
+			fluid.writeAsVTK("result/lid_driven_cavity_t" + std::to_string(t) + ".vtk");
 		}
 	}
 

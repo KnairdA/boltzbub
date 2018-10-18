@@ -98,7 +98,7 @@ int main() {
 
 		if ( t % 1000 == 0 ) {
 			std::cout << error(dimX-1) << std::endl;
-			fluid.writeAsVTK("result/data_t" + std::to_string(t) + ".vtk");
+			fluid.writeAsVTK("result/poiseuille_t" + std::to_string(t) + ".vtk");
 		}
 	}
 }
