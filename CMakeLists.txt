@@ -38,16 +38,6 @@ target_link_libraries(
 )
 
 add_executable(
-	lid_driven_cavity_with_obstacles
-		lid_driven_cavity_with_obstacles.cc
-)
-
-target_link_libraries(
-	lid_driven_cavity_with_obstacles
-		boltzbub
-)
-
-add_executable(
 	channel
 		channel.cc
 )

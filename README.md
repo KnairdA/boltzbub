@@ -6,11 +6,11 @@
 
 ## Experiments
 
-| Code                                  | Description                                                                                                    |
-| -                                     | -                                                                                                              |
-| `lid_driven_cavity.cc`                | Lid driven cavity using Zou/He boundary conditions for the top wall and simple bounce back for all other walls |
-| `lid_driven_cavity_with_obstacles.cc` | Same as `lid_driven_cavity.cc` but includes a grid of boxes to make things more interesting                    |
-| `channel.cc`                          | Channel flow with some obstacles and Dirichlet inflow condition                                                |
+| Code                                  | Description                                                     |
+| -                                     | -                                                               |
+| `lid_driven_cavity.cc`                | Lid driven cavity using (moving wall) bounce back conditions    |
+| `poiseuille.cc`                       | Poiseuille flow with velocity BC inflow and density BC outflow  |
+| `channel.cc`                          | Channel flow with some obstacles and Dirichlet inflow condition |
 
 ## Build
 
